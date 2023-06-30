@@ -1,0 +1,119 @@
+--
+select trail_name, listagg(coord_pair, ',') 
+from cherry_creek_trail
+group by trail_name;
+
+-- Using ST functions 
+select 
+'LINESTRING('||
+listagg(coord_pair, ',') 
+within group (order by point_id)
+||')' as my_linestring
+,st_length(my_linestring) as length_of_trail --this line is new! but it won't work!
+from cherry_creek_trail
+group by trail_name;
+
+--USE TO_GEOGRAPHY()
+select 
+'LINESTRING('||
+listagg(coord_pair, ',') 
+within group (order by point_id)
+||')' as my_linestring
+,(st_length(TO_GEOGRAPHY(my_linestring))) as length_of_trail --this line is new! but it won't work!
+from cherry_creek_trail
+group by trail_name;
+
+--To get a copy of a CREATE OR REPLACE VIEW code block for your existing view,
+select get_ddl('view', 'DENVER_AREA_TRAILS');
+
+create or replace view DENVER_AREA_TRAILS( FEATURE_NAME, FEATURE_COORDINATES, GEOMETRY,TRAIL_LENGTH,
+FEATURE_PROPERTIES, SPECS, WHOLE_OBJECT ) as
+select $1:features[0]:properties:Name::string as feature_name ,
+$1:features[0]:geometry:coordinates::string as feature_coordinates ,
+$1:features[0]:geometry::string as geometry ,
+st_length(TO_GEOGRAPHY(geometry)) as trail_length,
+$1:features[0]:properties::string as feature_properties ,
+$1:crs:properties:name::string as specs ,
+$1 as whole_object 
+from @trails_geojson (file_format => ff_json);
+
+
+SELECT * FROM DENVER_AREA_TRAILS;
+SELECT * FROM CHERRY_CREEK_TRAIL;
+
+
+--Create a view that will have similar columns to DENVER_AREA_TRAILS 
+--Even though this data started out as Parquet, and we're joining it with geoJSON data
+--So let's make it look like geoJSON instead.
+create view DENVER_AREA_TRAILS_2 as
+select 
+trail_name as feature_name
+,'{"coordinates":['||listagg('['||lng||','||lat||']',',')||'],"type":"LineString"}' as geometry
+,st_length(to_geography(geometry)) as trail_length
+from cherry_creek_trail
+group by trail_name;
+
+--Create a view that will have similar columns to DENVER_AREA_TRAILS 
+select feature_name, geometry, trail_length
+from DENVER_AREA_TRAILS
+union all
+select feature_name, geometry, trail_length
+from DENVER_AREA_TRAILS_2;
+
+--Add more GeoSpatial Calculations to get more GeoSpecial Information! 
+select feature_name
+, to_geography(geometry) as my_linestring
+, st_xmin(my_linestring) as min_eastwest
+, st_xmax(my_linestring) as max_eastwest
+, st_ymin(my_linestring) as min_northsouth
+, st_ymax(my_linestring) as max_northsouth
+, trail_length
+from DENVER_AREA_TRAILS
+union all
+select feature_name
+, to_geography(geometry) as my_linestring
+, st_xmin(my_linestring) as min_eastwest
+, st_xmax(my_linestring) as max_eastwest
+, st_ymin(my_linestring) as min_northsouth
+, st_ymax(my_linestring) as max_northsouth
+, trail_length
+from DENVER_AREA_TRAILS_2;
+
+CREATE VIEW TRAILS_AND_BOUNDARIES as
+select feature_name
+, to_geography(geometry) as my_linestring
+, st_xmin(my_linestring) as min_eastwest
+, st_xmax(my_linestring) as max_eastwest
+, st_ymin(my_linestring) as min_northsouth
+, st_ymax(my_linestring) as max_northsouth
+, trail_length
+from DENVER_AREA_TRAILS
+union all
+select feature_name
+, to_geography(geometry) as my_linestring
+, st_xmin(my_linestring) as min_eastwest
+, st_xmax(my_linestring) as max_eastwest
+, st_ymin(my_linestring) as min_northsouth
+, st_ymax(my_linestring) as max_northsouth
+, trail_length
+from DENVER_AREA_TRAILS_2;
+
+SELECT * FROM TRAILS_AND_BOUNDARIES;
+
+--=======A Polygon Can be Used to Create a Bounding Box======
+CREATE VIEW TRAILS_AND_BOUNDARIES_EDGES as
+SELECT
+min(min_eastwest) as western_edge,
+min(min_northsouth) as southern_edge,
+max(max_eastwest) as eastern_edge,
+max(max_northsouth)  as northern_edge
+FROM TRAILS_AND_BOUNDARIES;
+
+
+SELECT 'POLYGON(('||
+western_edge||' '||northern_edge||'.'||
+eastern_edge||' '||northern_edge||'.'||
+eastern_edge||' '||southern_edge||'.'||
+western_edge||' '||northern_edge||'))' as my_polygon
+FROM TRAILS_AND_BOUNDARIES_EDGES;
+
