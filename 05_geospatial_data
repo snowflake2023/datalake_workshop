@@ -1,0 +1,52 @@
+  /**
+   earth.google.com 
+   google.com/maps a
+   openstreetmap.org
+   clydedacruz.github.io/openstreetmap-wkt-playground/    .
+        - Reorder the latitude and longitude points
+        - Remove the comma between the two numbers
+   geojson.io     
+  **/-
+-======Latitude =================
+
+ Equator to North pole is 0 to 90 (0 to 90 N)
+ Equator to South pole is 0 to -90 (0 to 90 S)
+
+--======Longitude ================
+
+ GMeridian to Fiji is 0 to 180 (0 to 180 E)
+ GMeridian to Fiji is 0 to -180 (0 to 180 W);
+
+--=====Create new data base===============
+CREATE DATABASE MELS_SMOOTHIE_CHALLENGE_DB; 
+CREATE SCHEMA TRAILS;
+DROP schema trials;
+
+
+--====Create new stages ====================
+CREATE OR REPLACE STAGE MELS_SMOOTHIE_CHALLENGE_DB.TRAILS.trails_geojson
+URL = 's3://uni-lab-files-more/dlkw/trails/trails_geojson';
+
+list @TRIALS_GEOJSON;
+
+CREATE OR REPLACE STAGE MELS_SMOOTHIE_CHALLENGE_DB.TRAILS.TRAILS_PARQUET
+URL = 's3://uni-lab-files-more/dlkw/trails/trails_parquet';  
+
+list @TRAILS_PARQUET;
+
+--=== Create file format ======================
+CREATE OR REPLACE file format FF_JSON 
+TYPE='JSON'
+;
+CREATE OR REPLACE file format FF_PARQUET 
+TYPE='PARQUET'
+;
+--===Query the stages with file formats =========
+
+SELECT $1 FROM
+@MELS_SMOOTHIE_CHALLENGE_DB.TRAILS.trails_geojson
+(file_format => FF_JSON);
+
+SELECT $1 FROM
+@MELS_SMOOTHIE_CHALLENGE_DB.TRAILS.TRAILS_PARQUET
+(file_format => FF_PARQUET);
