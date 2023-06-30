@@ -1,0 +1,84 @@
+SELECT 
+$1:sequence_1 as sequence_1 ,
+$1:trail_name as trail_name ,
+$1:sequence_2 as sequence_2 ,
+$1:latitude as latitude ,
+$1:longitude as longitude ,
+$1:elevation as elevation 
+FROM @MELS_SMOOTHIE_CHALLENGE_DB.TRAILS.TRAILS_PARQUET
+(file_format => FF_PARQUET);
+
+/*
+cast both longitude and latitude data as NUMBER(11,8) 
+swap latitude and longitude
+*/
+SELECT 
+$1:sequence_1 as point_id ,
+$1:trail_name::varchar as trail_name ,
+$1:latitude::number(11,8) as lng ,
+$1:longitude::number(11,8) as lat  
+FROM @MELS_SMOOTHIE_CHALLENGE_DB.TRAILS.TRAILS_PARQUET
+(file_format => FF_PARQUET)
+order by point_id;
+
+CREATE OR REPLACE VIEW CHERRY_CREEK_TRAIL as
+SELECT 
+$1:sequence_1 as point_id ,
+$1:trail_name::varchar as trail_name ,
+$1:latitude::number(11,8) as lng ,
+$1:longitude::number(11,8) as lat  
+FROM @MELS_SMOOTHIE_CHALLENGE_DB.TRAILS.TRAILS_PARQUET
+(file_format => FF_PARQUET)
+order by point_id;
+
+
+--Using concatenate to prepare the data for plotting on a map
+select top 100 
+ lng||' '||lat as coord_pair
+,'POINT('||coord_pair||')' as trail_point
+from cherry_creek_trail;
+
+--To add a column, we have to replace the entire view
+create or replace view cherry_creek_trail as
+select 
+ $1:sequence_1 as point_id,
+ $1:trail_name::varchar as trail_name,
+ $1:latitude::number(11,8) as lng,
+ $1:longitude::number(11,8) as lat,
+ lng||' '||lat as coord_pair
+from @trails_parquet
+(file_format => ff_parquet)
+order by point_id;
+
+--- the output can be used on wktplayground
+select 
+'LINESTRING('||
+listagg(coord_pair, ',') 
+within group (order by point_id)
+||')' as my_linestring
+from cherry_creek_trail
+where point_id <= 10
+group by trail_name;
+
+-- JSON file
+select
+$1:features[0]:properties:Name::string as feature_name
+,$1:features[0]:geometry:coordinates::string as feature_coordinates
+,$1:features[0]:geometry::string as geometry
+,$1:features[0]:properties::string as feature_properties
+,$1:crs:properties:name::string as specs
+,$1 as whole_object
+from @trails_geojson (file_format => ff_json);
+
+
+CREATE OR REPLACE VIEW DENVER_AREA_TRAILS as
+select
+$1:features[0]:properties:Name::string as feature_name
+,$1:features[0]:geometry:coordinates::string as feature_coordinates
+,$1:features[0]:geometry::string as geometry
+,$1:features[0]:properties::string as feature_properties
+,$1:crs:properties:name::string as specs
+,$1 as whole_object
+from @trails_geojson (file_format => ff_json);
+
+SELECT * FROM DENVER_AREA_TRAILS;
